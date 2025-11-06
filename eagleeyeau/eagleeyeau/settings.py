@@ -11,7 +11,6 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
-from decouple import config
 from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -22,10 +21,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY', default='django-insecure--#)6=&0z@h#u$tq4^w0v89)8=_v74u*py9um)(#tvr&6#mgk%_')
+SECRET_KEY = 'django-insecure--#)6=&0z@h#u$tq4^w0v89)8=_v74u*py9um)(#tvr&6#mgk%_'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = True
 
 ALLOWED_HOSTS = ['10.10.13.27', 'localhost', '127.0.0.1', '*']
 
@@ -220,12 +219,12 @@ CSRF_TRUSTED_ORIGINS = [
     "https://chic-brioche-594496.netlify.app",
 ]
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = config('EMAIL_HOST', default='smtp.strato.com')
-EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='noreply@wiiz.ai')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@wiiz.ai')
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'nahid2887@gmail.com'
+EMAIL_HOST_PASSWORD = 'qsqedgvsqywhumbz'
+DEFAULT_FROM_EMAIL = 'nahid2887@gmail.com'
 
 # Swagger Settings
 SWAGGER_SETTINGS = {

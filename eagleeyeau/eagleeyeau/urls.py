@@ -58,10 +58,7 @@ urlpatterns = [
     # Authentication URLs
     path('api/auth/', include('authentication.urls')),
     
-    # Employee URLs (Employee role only)
-    path('api/employee/', include('employee.urls')),
-    
-    # Timesheet URLs (deprecated - use /api/employee/ instead)
+    # Timesheet URLs
     path('api/timesheet/', include('timesheet.urls')),
     
     # Super Admin Dashboard URLs
@@ -75,6 +72,9 @@ urlpatterns = [
     
     # Project Manager URLs
     path('api/project-manager/', include('Project_manager.urls')),
+    
+    # Employee URLs
+    path('api/employee/', include('emopye.urls')),
     
     # Swagger Documentation URLs
     re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),

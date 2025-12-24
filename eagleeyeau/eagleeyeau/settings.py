@@ -60,12 +60,12 @@ INSTALLED_APPS = [
     
     # Local apps
     'authentication',
-    'employee',
     'timesheet',
     'superadmindashboard',
     'admindashboard',
     'estimator',
     'Project_manager',
+    'emopye',
 ]
 
 MIDDLEWARE = [
@@ -77,6 +77,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'eagleeyeau.middleware.RequestLoggingMiddleware',
 ]
 
 ROOT_URLCONF = 'eagleeyeau.urls'
@@ -199,6 +200,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8000",
     "http://localhost:8080",
     "https://chic-brioche-594496.netlify.app",
+    "http://10.10.13.39:5174",
+    "http://localhost:5174",
 ]
 
 # Allow specific headers
@@ -239,3 +242,51 @@ SWAGGER_SETTINGS = {
     'USE_SESSION_AUTH': False,
     'JSON_EDITOR': True,
 }
+
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{levelname}] {asctime} | {name} | {message}',
+            'style': '{',
+            'datefmt': '%d/%b/%Y %H:%M:%S',
+        },
+        'simple': {
+            'format': '{levelname} | {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'django_requests.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'eagleeyeau': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}
+

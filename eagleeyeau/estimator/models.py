@@ -18,12 +18,17 @@ class Estimate(models.Model):
     
     # Basic Info
     serial_number = models.CharField(max_length=100, unique=True)
+    estimate_number = models.CharField(max_length=100, unique=True, null=True, blank=True, help_text="Estimate number for tracking")
     client_name = models.CharField(max_length=200)
     project_name = models.CharField(max_length=300)
     
     # Fixed Fields - Status and Date
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     estimate_date = models.DateField(auto_now_add=True)
+    end_date = models.DateField(null=True, blank=True, help_text="End/completion date of the project")
+    # Targeted rooms info (optional array)
+    targeted_rooms = models.JSONField(default=list, blank=True, help_text="Array of targeted rooms for the estimate")
+    targeted_rooms_updated = models.DateTimeField(null=True, blank=True, help_text="Timestamp when targeted_rooms was last updated")
     
     # Images (Reference URLs)
     image_1 = models.URLField(null=True, blank=True, help_text="First reference image URL")

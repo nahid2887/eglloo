@@ -37,6 +37,8 @@ class RegisterView(APIView):
     Registers a new user and returns access and refresh tokens.
     """
     permission_classes = [AllowAny]
+    # Do not run any authentication on this view — ignore any Authorization header
+    authentication_classes = []
 
     @swagger_auto_schema(
         request_body=UserRegistrationSerializer,
@@ -99,6 +101,8 @@ class LoginView(APIView):
     Returns access and refresh tokens upon successful authentication.
     """
     permission_classes = [AllowAny]
+    # Bypass authentication for login endpoint to avoid token validation interfering
+    authentication_classes = []
 
     @swagger_auto_schema(
         request_body=UserLoginSerializer,
@@ -171,6 +175,7 @@ class VerifyOTPView(APIView):
     Verifies the OTP for password reset flow.
     """
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     @swagger_auto_schema(
         request_body=OTPVerificationSerializer,
@@ -247,6 +252,7 @@ class ResendOTPView(APIView):
     API endpoint for resending OTP (for password reset).
     """
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     @swagger_auto_schema(
         request_body=SendOTPSerializer,
@@ -285,6 +291,7 @@ class ForgotPasswordView(APIView):
     Sends OTP to email for password reset.
     """
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     @swagger_auto_schema(
         request_body=SendOTPSerializer,
@@ -337,6 +344,7 @@ class ResetPasswordView(APIView):
     User must verify OTP first using /verify-otp/ endpoint before calling this.
     """
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     @swagger_auto_schema(
         request_body=PasswordResetSerializer,
@@ -503,6 +511,8 @@ class AcceptInvitationView(APIView):
     API endpoint for user to accept invitation and set password.
     """
     permission_classes = [AllowAny]
+    # Ignore any Authorization header for invitation acceptance
+    authentication_classes = []
 
     @swagger_auto_schema(
         operation_description="Verify invitation token and get pre-filled information (email, role, company name)",

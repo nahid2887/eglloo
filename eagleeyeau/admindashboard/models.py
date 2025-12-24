@@ -28,14 +28,7 @@ class EstimateDefaults(models.Model):
     
     name = models.CharField(max_length=255, help_text="Name of the estimate default")
     description = models.TextField(help_text="Description of the estimate default", blank=True, null=True)
-    cost = models.DecimalField(max_digits=10, decimal_places=2, help_text="Total cost")
     category = models.CharField(max_length=255, help_text="Category of the estimate")
-    current_materials = models.ManyToManyField(
-        Material, 
-        related_name='estimate_defaults',
-        blank=True,
-        help_text="Materials associated with this estimate default"
-    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='estimate_defaults_created')
@@ -55,12 +48,19 @@ class Component(models.Model):
     component_name = models.CharField(max_length=255, help_text="Name of the component")
     description = models.TextField(help_text="Description of the component", blank=True, null=True)
     base_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Base price of the component")
-    labor_hours = models.DecimalField(max_digits=8, decimal_places=2, help_text="Labor hours required")
     material_used = models.ManyToManyField(
         Material,
         related_name='components',
         blank=True,
-        help_text="Materials used in this component"
+        help_text="Materials used in this component",
+        through='ComponentMaterialQuantity'
+    )
+    estimate_defaults = models.ManyToManyField(
+        EstimateDefaults,
+        related_name='components',
+        blank=True,
+        help_text="Estimate defaults associated with this component",
+        through='ComponentEstimateQuantity'
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -73,4 +73,65 @@ class Component(models.Model):
 
     def __str__(self):
         return f"{self.component_name}"
+
+
+class ComponentMaterialQuantity(models.Model):
+    """Through model to track material quantities in components"""
+    
+    component = models.ForeignKey(
+        Component,
+        on_delete=models.CASCADE,
+        related_name='material_quantities'
+    )
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.CASCADE,
+        related_name='component_quantities'
+    )
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Quantity of material needed"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('component', 'material')
+        verbose_name = "Component Material Quantity"
+        verbose_name_plural = "Component Material Quantities"
+
+    def __str__(self):
+        return f"{self.component.component_name} - {self.material.material_name} ({self.quantity})"
+
+
+class ComponentEstimateQuantity(models.Model):
+    """Through model to track estimate default quantities in components"""
+    
+    component = models.ForeignKey(
+        Component,
+        on_delete=models.CASCADE,
+        related_name='estimate_quantities'
+    )
+    estimate_default = models.ForeignKey(
+        EstimateDefaults,
+        on_delete=models.CASCADE,
+        related_name='component_quantities'
+    )
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Quantity of estimate default needed"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('component', 'estimate_default')
+        verbose_name = "Component Estimate Quantity"
+        verbose_name_plural = "Component Estimate Quantities"
+
+    def __str__(self):
+        return f"{self.component.component_name} - {self.estimate_default.name} ({self.quantity})"
+    
     

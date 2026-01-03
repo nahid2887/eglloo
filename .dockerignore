@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+django_requests.log
+
+# Local environment files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Documentation
+*.md
+
+# Test files
+test_*.py
+run_tests.sh
+
+# Database (we'll copy it separately if needed)
+# *.sqlite3
+
+# Byte-compiled files
+*.pyc
+
+# Local settings
+local_settings.py

@@ -34,3 +34,18 @@ Thumbs.db
 # Backup and compiled files
 *.bak
 *.swp
+# Docker
+.docker/
+docker-compose.override.yml
+
+# SSL Certificates (regenerate as needed)
+ssl/cert.pem
+ssl/key.pem
+
+# Database volumes
+postgres_data/
+certbot_data/
+
+# Temporary
+*.tmp
+.cache/

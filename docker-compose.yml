@@ -32,9 +32,40 @@ services:
       - DB_NAME=eagleeyeau
       - DB_USER=postgres
       - DB_PASSWORD=postgres123
+      - ALLOWED_HOSTS=app.lignaflow.com,localhost
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - eagleeyeau-network
+
+  nginx:
+    build: ./nginx
+    container_name: eagleeyeau-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./eagleeyeau/staticfiles:/app/staticfiles:ro
+      - certbot_data:/var/www/certbot:ro
+    depends_on:
+      - web
+    networks:
+      - eagleeyeau-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
 volumes:
   postgres_data:
+  certbot_data:
+
+networks:
+  eagleeyeau-network:
+    driver: bridge

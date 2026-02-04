@@ -824,9 +824,22 @@ def get_single_assigned_project(request, project_id):
         employee = request.user
         
         # Get the project and verify employee has tasks in it
-        project = Project.objects.prefetch_related(
-            'tasks__assigned_employee'
-        ).get(id=project_id, tasks__assigned_employee=employee)
+        # Using filter().distinct().first() instead of get() to handle multiple tasks
+        project = Project.objects.filter(
+            id=project_id, 
+            tasks__assigned_employee=employee
+        ).distinct().first()
+        
+        # Check if project exists and employee has tasks in it
+        if not project:
+            return Response(
+                format_response(
+                    success=False,
+                    message=f"Project with ID {project_id} not found or you have no tasks in this project",
+                    data=None
+                ),
+                status=status.HTTP_404_NOT_FOUND
+            )
         
         # Get task statistics for this project assigned to the employee
         employee_tasks = Task.objects.filter(
@@ -860,16 +873,6 @@ def get_single_assigned_project(request, project_id):
                 }
             ),
             status=status.HTTP_200_OK
-        )
-    
-    except Project.DoesNotExist:
-        return Response(
-            format_response(
-                success=False,
-                message=f"Project with ID {project_id} not found or you have no tasks in this project",
-                data=None
-            ),
-            status=status.HTTP_404_NOT_FOUND
         )
     
     except Exception as e:

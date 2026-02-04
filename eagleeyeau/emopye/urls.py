@@ -44,3 +44,4 @@ urlpatterns = [
     path('tasks/<int:task_id>/status/', update_task_status, name='update-task-status-restful'),
 ]
 #
+#

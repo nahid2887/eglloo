@@ -8,10 +8,11 @@
 ```
 GET /api/employee/assigned-tasks/
 ```
-- Retrieve all tasks assigned to the authenticated employee
+- Retrieve all tasks assigned to the authenticated employee (paginated)
 - Returns statistics (total, completed, due, upcoming, in-progress, not-started)
 - Full task details with project information
 - Support for filters: status, priority, project_id, search
+- **NEW:** Pagination support with configurable page size (1-100 items per page)
 
 **2. Update Task Status Endpoint** (Bonus)
 ```
@@ -85,18 +86,20 @@ PATCH /api/employee/update-task-status/
 ## 🎯 Features Implemented
 
 ### Core Features
-✅ View all assigned tasks
+✅ View all assigned tasks (paginated)
 ✅ Real-time statistics calculation
 ✅ Filter by status (4 options)
 ✅ Filter by priority (3 options)
 ✅ Filter by project
-✅ Search in task name/description
+✅ Search in task name, description, project name, or room name
 ✅ Update task status
 ✅ Combine multiple filters
 ✅ Full project context with each task
 ✅ Role-based access control
 ✅ Data isolation per employee
 ✅ JWT authentication
+✅ **NEW:** Pagination with configurable page size
+✅ **NEW:** Enhanced search across multiple fields
 
 ### Security Features
 ✅ Employee-only access
@@ -163,7 +166,8 @@ Each task includes:
 **Response Format:** ✅
 - Typical response for 10 tasks: ~15-20 KB
 - Response time: < 500ms on moderate server
-- Supports pagination (enhancement)
+- Pagination support with configurable page size (default 10, max 100)
+- Includes pagination metadata (count, page info, next/previous links)
 
 ---
 
@@ -185,17 +189,29 @@ GET /api/employee/assigned-tasks/?status=in_progress
 GET /api/employee/assigned-tasks/?priority=high
 ```
 
-### 4. Search Tasks
+### 4. Search Tasks (Enhanced - searches multiple fields)
 ```bash
 GET /api/employee/assigned-tasks/?search=kitchen
 ```
+Searches in: task name, description, project name, room name
 
-### 5. Combine Filters
+### 5. Pagination - Basic
 ```bash
-GET /api/employee/assigned-tasks/?status=in_progress&priority=high&project_id=1
+GET /api/employee/assigned-tasks/?page=1&page_size=10
+```
+Default page_size: 10, Max: 100
+
+### 6. Pagination - With Filters
+```bash
+GET /api/employee/assigned-tasks/?status=in_progress&page=1&page_size=20
 ```
 
-### 6. Update Task Status
+### 7. Combine All - Search, Filter, and Paginate
+```bash
+GET /api/employee/assigned-tasks/?search=kitchen&status=in_progress&priority=high&page=1&page_size=15
+```
+
+### 8. Update Task Status
 ```bash
 curl -X PATCH "http://10.10.13.27:8002/api/employee/update-task-status/" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
@@ -210,7 +226,7 @@ curl -X PATCH "http://10.10.13.27:8002/api/employee/update-task-status/" \
 ```json
 {
   "success": true,
-  "message": "Retrieved 5 assigned tasks for employee Liam Anderson",
+  "message": "Retrieved 10 assigned tasks for employee Liam Anderson",
   "data": {
     "employee": {
       "id": 7,
@@ -219,12 +235,20 @@ curl -X PATCH "http://10.10.13.27:8002/api/employee/update-task-status/" \
       "email": "liam@example.com"
     },
     "statistics": {
-      "total_tasks": 5,
-      "completed_tasks": 2,
-      "due_tasks": 2,
-      "upcoming_tasks": 1,
-      "in_progress_tasks": 2,
-      "not_started_tasks": 1
+      "total_tasks": 25,
+      "completed_tasks": 10,
+      "due_tasks": 8,
+      "upcoming_tasks": 5,
+      "in_progress_tasks": 12,
+      "not_started_tasks": 3
+    },
+    "pagination": {
+      "count": 25,
+      "page_size": 10,
+      "total_pages": 3,
+      "current_page": 1,
+      "next": "http://localhost:8005/api/employee/assigned-tasks/?page=2&page_size=10",
+      "previous": null
     },
     "tasks": [
       {

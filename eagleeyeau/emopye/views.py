@@ -1,6 +1,7 @@
 from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.pagination import PageNumberPagination
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.utils import timezone
@@ -30,7 +31,7 @@ class IsEmployee(permissions.BasePermission):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated, IsEmployee])
 @swagger_auto_schema(
-    operation_summary="Get employee assigned tasks with statistics",
+    operation_summary="Get employee assigned tasks with statistics and pagination",
     operation_description="""
     API endpoint for Employee to view all their assigned tasks with statistics.
     
@@ -41,17 +42,20 @@ class IsEmployee(permissions.BasePermission):
     - Upcoming tasks (due within 7 days) count
     - In-progress tasks count
     - Not started tasks count
-    - List of all assigned tasks with project details
+    - Paginated list of all assigned tasks with project details
     
     Query Parameters:
     - status: Filter by task status (not_started, in_progress, completed, blocked)
     - priority: Filter by priority (low, medium, high)
     - project_id: Filter by specific project
-    - search: Search in task name or description
+    - search: Search in task name, description, project name, or room name
+    - page: Page number for pagination (default: 1)
+    - page_size: Number of items per page (default: 10, max: 100)
     
     Returns:
     - Task statistics summary
-    - Detailed list of all assigned tasks with full project information
+    - Paginated list of assigned tasks with full project information
+    - Pagination metadata (count, next, previous, page info)
     
     Only the authenticated employee can view their own tasks.
     """,
@@ -80,8 +84,22 @@ class IsEmployee(permissions.BasePermission):
         openapi.Parameter(
             'search',
             openapi.IN_QUERY,
-            description='Search by task name or description',
+            description='Search by task name, description, project name, or room name',
             type=openapi.TYPE_STRING,
+            required=False
+        ),
+        openapi.Parameter(
+            'page',
+            openapi.IN_QUERY,
+            description='Page number for pagination (default: 1)',
+            type=openapi.TYPE_INTEGER,
+            required=False
+        ),
+        openapi.Parameter(
+            'page_size',
+            openapi.IN_QUERY,
+            description='Number of items per page (default: 10, max: 100)',
+            type=openapi.TYPE_INTEGER,
             required=False
         ),
     ],
@@ -107,6 +125,17 @@ class IsEmployee(permissions.BasePermission):
                                     'not_started_tasks': openapi.Schema(type=openapi.TYPE_INTEGER),
                                 }
                             ),
+                            'pagination': openapi.Schema(
+                                type=openapi.TYPE_OBJECT,
+                                properties={
+                                    'count': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                    'next': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'previous': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'page_size': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                    'total_pages': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                    'current_page': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                }
+                            ),
                             'tasks': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT)),
                         }
                     )
@@ -120,22 +149,27 @@ class IsEmployee(permissions.BasePermission):
 )
 def get_employee_assigned_tasks(request):
     """
-    API endpoint for Employee to view all their assigned tasks.
+    API endpoint for Employee to view all their assigned tasks with pagination.
     
     Endpoint: GET /api/employee/assigned-tasks/
     
     Only returns tasks assigned to the logged-in employee.
     Includes task statistics (total, completed, due, upcoming, etc.)
+    Supports filtering, searching, and pagination.
     
     Query Parameters:
-    - status: Filter by task status
-    - priority: Filter by priority
-    - project_id: Filter by project
-    - search: Search in task name/description
+    - status: Filter by task status (not_started, in_progress, completed, blocked)
+    - priority: Filter by priority (low, medium, high)
+    - project_id: Filter by specific project
+    - search: Search in task name, description, project name, or room name
+    - page: Page number (default: 1)
+    - page_size: Items per page (default: 10, max: 100)
     
-    Returns task list with project details for each task.
+    Returns paginated task list with project details for each task.
     """
     try:
+        from django.db.models import Q
+        
         current_user = request.user
         
         # Get all tasks assigned to the current employee
@@ -158,17 +192,19 @@ def get_employee_assigned_tasks(request):
         if project_id_filter:
             tasks = tasks.filter(project_id=project_id_filter)
         
+        # Enhanced search functionality
         if search_query:
-            from django.db.models import Q
             tasks = tasks.filter(
                 Q(task_name__icontains=search_query) |
-                Q(description__icontains=search_query)
+                Q(description__icontains=search_query) |
+                Q(project__project_name__icontains=search_query) |
+                Q(room__icontains=search_query)
             )
         
         # Order by priority and due date
         tasks = tasks.order_by('priority', 'due_date')
         
-        # Calculate statistics
+        # Calculate statistics (before pagination)
         all_tasks = Task.objects.filter(assigned_employee=current_user)
         today = timezone.now().date()
         upcoming_date = today + timedelta(days=7)
@@ -182,27 +218,56 @@ def get_employee_assigned_tasks(request):
             'not_started_tasks': all_tasks.filter(status='not_started').count(),
         }
         
+        # Pagination
+        page_size = request.query_params.get('page_size', 10)
+        try:
+            page_size = min(int(page_size), 100)  # Max 100 items per page
+            page_size = max(page_size, 1)  # Min 1 item per page
+        except (ValueError, TypeError):
+            page_size = 10
+        
+        paginator = PageNumberPagination()
+        paginator.page_size = page_size
+        paginated_tasks = paginator.paginate_queryset(tasks, request)
+        
         # Serialize data
-        tasks_serializer = EmployeeAssignedTaskSerializer(tasks, many=True)
+        tasks_serializer = EmployeeAssignedTaskSerializer(paginated_tasks, many=True)
         stats_serializer = EmployeeTaskStatsSerializer(stats)
         
-        return Response(
-            format_response(
-                success=True,
-                message=f"Retrieved {tasks.count()} assigned tasks for employee {current_user.get_full_name()}",
-                data={
-                    'employee': {
-                        'id': current_user.id,
-                        'username': current_user.username,
-                        'full_name': current_user.get_full_name(),
-                        'email': current_user.email,
-                    },
-                    'statistics': stats_serializer.data,
-                    'tasks': tasks_serializer.data,
-                }
-            ),
-            status=status.HTTP_200_OK
+        # Get pagination info
+        page_number = request.query_params.get('page', 1)
+        try:
+            page_number = int(page_number)
+        except (ValueError, TypeError):
+            page_number = 1
+        
+        total_count = tasks.count()
+        total_pages = (total_count + page_size - 1) // page_size
+        
+        response_data = format_response(
+            success=True,
+            message=f"Retrieved {paginated_tasks.__len__()} assigned tasks for employee {current_user.get_full_name()}",
+            data={
+                'employee': {
+                    'id': current_user.id,
+                    'username': current_user.username,
+                    'full_name': current_user.get_full_name(),
+                    'email': current_user.email,
+                },
+                'statistics': stats_serializer.data,
+                'pagination': {
+                    'count': total_count,
+                    'page_size': page_size,
+                    'total_pages': total_pages,
+                    'current_page': page_number,
+                    'next': paginator.get_next_link(),
+                    'previous': paginator.get_previous_link(),
+                },
+                'tasks': tasks_serializer.data,
+            }
         )
+        
+        return Response(response_data, status=status.HTTP_200_OK)
     
     except Exception as e:
         return Response(

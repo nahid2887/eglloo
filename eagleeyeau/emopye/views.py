@@ -280,6 +280,100 @@ def get_employee_assigned_tasks(request):
         )
 
 
+# ====================== EMPLOYEE SINGLE ASSIGNED TASK API ======================
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated, IsEmployee])
+@swagger_auto_schema(
+    operation_summary="Get single assigned task details",
+    operation_description="""
+    API endpoint for Employee to view details of a single assigned task.
+    
+    This endpoint returns complete details of a specific task assigned to the current employee.
+    
+    Endpoint: GET /api/employee/assigned-tasks/{task_id}/
+    
+    Path Parameters:
+    - task_id: ID of the task to retrieve
+    
+    Returns:
+    - Complete task details with all information
+    - Project information
+    - Employee assignment details
+    - Task status and priority
+    - Timestamps and other metadata
+    
+    Only the employee to whom the task is assigned can view it.
+    """,
+    responses={
+        200: openapi.Response(
+            description="Task details retrieved successfully",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                    'message': openapi.Schema(type=openapi.TYPE_STRING),
+                    'data': openapi.Schema(type=openapi.TYPE_OBJECT),
+                }
+            )
+        ),
+        401: openapi.Response(description="Unauthorized - Authentication required"),
+        403: openapi.Response(description="Forbidden - You cannot view this task"),
+        404: openapi.Response(description="Task not found"),
+    },
+    tags=['Employee - Tasks']
+)
+def get_single_assigned_task(request, task_id):
+    """
+    API endpoint to get a single task assigned to the employee.
+    
+    Endpoint: GET /api/employee/assigned-tasks/{task_id}/
+    
+    Only returns the task if it's assigned to the current employee.
+    Includes all task details, project information, and timestamps.
+    """
+    try:
+        current_user = request.user
+        
+        # Get the task and verify it belongs to the current employee
+        task = Task.objects.select_related(
+            'project', 'project__created_by', 'created_by', 'assigned_employee'
+        ).get(id=task_id, assigned_employee=current_user)
+        
+        # Serialize the task
+        serializer = EmployeeAssignedTaskSerializer(task)
+        
+        return Response(
+            format_response(
+                success=True,
+                message=f"Retrieved task details for task ID {task_id}",
+                data={
+                    'task': serializer.data
+                }
+            ),
+            status=status.HTTP_200_OK
+        )
+    
+    except Task.DoesNotExist:
+        return Response(
+            format_response(
+                success=False,
+                message=f"Task with ID {task_id} not found or not assigned to you",
+                data=None
+            ),
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    except Exception as e:
+        return Response(
+            format_response(
+                success=False,
+                message=f"Error retrieving task details: {str(e)}",
+                data=None
+            ),
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
 @api_view(['PATCH', 'POST'])
 @permission_classes([permissions.IsAuthenticated, IsEmployee])
 @swagger_auto_schema(
@@ -669,6 +763,120 @@ def get_employee_assigned_projects(request):
             format_response(
                 success=False,
                 message=f"Error retrieving assigned projects: {str(e)}",
+                data=None
+            ),
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+# ====================== EMPLOYEE SINGLE ASSIGNED PROJECT API ======================
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated, IsEmployee])
+@swagger_auto_schema(
+    operation_summary="Get single assigned project details",
+    operation_description="""
+    API endpoint for Employee to view details of a single assigned project.
+    
+    This endpoint returns complete details of a specific project where the employee has assigned tasks.
+    
+    Endpoint: GET /api/employee/assigned-projects/{project_id}/
+    
+    Path Parameters:
+    - project_id: ID of the project to retrieve
+    
+    Returns:
+    - Complete project details
+    - Project status and timeline
+    - Task count statistics for this project
+    - Client information
+    - Project description and other metadata
+    
+    Only projects where the employee has assigned tasks can be viewed.
+    """,
+    responses={
+        200: openapi.Response(
+            description="Project details retrieved successfully",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                    'message': openapi.Schema(type=openapi.TYPE_STRING),
+                    'data': openapi.Schema(type=openapi.TYPE_OBJECT),
+                }
+            )
+        ),
+        401: openapi.Response(description="Unauthorized - Authentication required"),
+        403: openapi.Response(description="Forbidden - You have no tasks in this project"),
+        404: openapi.Response(description="Project not found"),
+    },
+    tags=['Employee - Projects']
+)
+def get_single_assigned_project(request, project_id):
+    """
+    API endpoint to get a single project assigned to the employee.
+    
+    Endpoint: GET /api/employee/assigned-projects/{project_id}/
+    
+    Only returns the project if the employee has assigned tasks in it.
+    Includes complete project details and statistics.
+    """
+    try:
+        employee = request.user
+        
+        # Get the project and verify employee has tasks in it
+        project = Project.objects.prefetch_related(
+            'tasks__assigned_employee'
+        ).get(id=project_id, tasks__assigned_employee=employee)
+        
+        # Get task statistics for this project assigned to the employee
+        employee_tasks = Task.objects.filter(
+            project=project,
+            assigned_employee=employee
+        )
+        
+        task_stats = {
+            'total_tasks': employee_tasks.count(),
+            'completed_tasks': employee_tasks.filter(status='completed').count(),
+            'in_progress_tasks': employee_tasks.filter(status='in_progress').count(),
+            'not_started_tasks': employee_tasks.filter(status='not_started').count(),
+            'due_tasks': employee_tasks.filter(
+                due_date__lt=timezone.now().date()
+            ).exclude(status='completed').count(),
+        }
+        
+        # Serialize the project
+        serializer = EmployeeAssignedProjectSerializer(
+            project,
+            context={'employee': employee}
+        )
+        
+        return Response(
+            format_response(
+                success=True,
+                message=f"Retrieved project details for project ID {project_id}",
+                data={
+                    'project': serializer.data,
+                    'task_statistics': task_stats
+                }
+            ),
+            status=status.HTTP_200_OK
+        )
+    
+    except Project.DoesNotExist:
+        return Response(
+            format_response(
+                success=False,
+                message=f"Project with ID {project_id} not found or you have no tasks in this project",
+                data=None
+            ),
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    except Exception as e:
+        return Response(
+            format_response(
+                success=False,
+                message=f"Error retrieving project details: {str(e)}",
                 data=None
             ),
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

@@ -1,8 +1,10 @@
 from django.urls import path
 from .views import (
     get_employee_assigned_tasks,
+    get_single_assigned_task,
     update_employee_task_status,
     get_employee_assigned_projects,
+    get_single_assigned_project,
     get_employee_project_tasks,
     update_task_status,
     get_employee_task_schedule,
@@ -19,6 +21,7 @@ urlpatterns = [
     
     # Employee Assigned Tasks
     path('assigned-tasks/', get_employee_assigned_tasks, name='employee-assigned-tasks'),
+    path('assigned-tasks/<int:task_id>/', get_single_assigned_task, name='employee-single-task'),
     path('update-task-status/', update_employee_task_status, name='update-task-status'),
     
     # Employee Task Schedule (sorted by dates)
@@ -34,6 +37,7 @@ urlpatterns = [
     
     # Employee Assigned Projects
     path('assigned-projects/', get_employee_assigned_projects, name='employee-assigned-projects'),
+    path('assigned-projects/<int:project_id>/', get_single_assigned_project, name='employee-single-project'),
     path('projects/<int:project_id>/tasks/', get_employee_project_tasks, name='employee-project-tasks'),
     
     # RESTful Task Status Update

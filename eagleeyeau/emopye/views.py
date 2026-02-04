@@ -495,15 +495,31 @@ def update_employee_task_status(request):
         openapi.Parameter(
             'status',
             openapi.IN_QUERY,
-            description='Filter by project status',
+            description='Filter by project status (not_started, in_progress, completed, on_hold, cancelled)',
             type=openapi.TYPE_STRING,
-            enum=['not_started', 'in_progress', 'completed', 'on_hold', 'cancelled']
+            enum=['not_started', 'in_progress', 'completed', 'on_hold', 'cancelled'],
+            required=False
         ),
         openapi.Parameter(
             'search',
             openapi.IN_QUERY,
             description='Search in project name or client name',
-            type=openapi.TYPE_STRING
+            type=openapi.TYPE_STRING,
+            required=False
+        ),
+        openapi.Parameter(
+            'page',
+            openapi.IN_QUERY,
+            description='Page number for pagination (default: 1)',
+            type=openapi.TYPE_INTEGER,
+            required=False
+        ),
+        openapi.Parameter(
+            'page_size',
+            openapi.IN_QUERY,
+            description='Number of items per page (default: 10, max: 100)',
+            type=openapi.TYPE_INTEGER,
+            required=False
         ),
     ],
     responses={
@@ -526,6 +542,17 @@ def update_employee_task_status(request):
                                     'cancelled_projects': openapi.Schema(type=openapi.TYPE_INTEGER),
                                 }
                             ),
+                            'pagination': openapi.Schema(
+                                type=openapi.TYPE_OBJECT,
+                                properties={
+                                    'count': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                    'page_size': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                    'total_pages': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                    'current_page': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                    'next': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'previous': openapi.Schema(type=openapi.TYPE_STRING),
+                                }
+                            ),
                             'projects': openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT)),
                         }
                     )
@@ -539,10 +566,22 @@ def update_employee_task_status(request):
 )
 def get_employee_assigned_projects(request):
     """
-    API endpoint for Employee to view all projects they have tasks assigned to.
+    API endpoint for Employee to view all projects they have tasks assigned to with pagination.
     Shows project progress, task counts, deadlines, and other details.
+    
+    Endpoint: GET /api/employee/assigned-projects/
+    
+    Query Parameters:
+    - status: Filter by project status (not_started, in_progress, completed, on_hold, cancelled)
+    - search: Search in project name or client name
+    - page: Page number (default: 1)
+    - page_size: Items per page (default: 10, max: 100)
+    
+    Returns paginated project list with statistics.
     """
     try:
+        from django.db.models import Q
+        
         employee = request.user
         
         # Get all projects where employee has assigned tasks
@@ -558,13 +597,12 @@ def get_employee_assigned_projects(request):
         # Apply search filter
         search_query = request.query_params.get('search', '').strip()
         if search_query:
-            from django.db.models import Q
             projects = projects.filter(
                 Q(project_name__icontains=search_query) |
                 Q(client_name__icontains=search_query)
             )
         
-        # Calculate statistics
+        # Calculate statistics (before pagination)
         total_projects = projects.count()
         completed_projects = projects.filter(status='completed').count()
         due_projects = projects.filter(
@@ -573,23 +611,52 @@ def get_employee_assigned_projects(request):
         ).count()
         cancelled_projects = projects.filter(status='cancelled').count()
         
+        # Pagination
+        page_size = request.query_params.get('page_size', 10)
+        try:
+            page_size = min(int(page_size), 100)  # Max 100 items per page
+            page_size = max(page_size, 1)  # Min 1 item per page
+        except (ValueError, TypeError):
+            page_size = 10
+        
+        paginator = PageNumberPagination()
+        paginator.page_size = page_size
+        paginated_projects = paginator.paginate_queryset(projects, request)
+        
         # Serialize the data
         serializer = EmployeeAssignedProjectSerializer(
-            projects,
+            paginated_projects,
             many=True,
             context={'employee': employee}
         )
         
+        # Get pagination info
+        page_number = request.query_params.get('page', 1)
+        try:
+            page_number = int(page_number)
+        except (ValueError, TypeError):
+            page_number = 1
+        
+        total_pages = (total_projects + page_size - 1) // page_size
+        
         return Response(
             format_response(
                 success=True,
-                message=f"Retrieved {total_projects} assigned projects",
+                message=f"Retrieved {paginated_projects.__len__()} assigned projects",
                 data={
                     'statistics': {
                         'total_projects': total_projects,
                         'completed_projects': completed_projects,
                         'due_projects': due_projects,
                         'cancelled_projects': cancelled_projects,
+                    },
+                    'pagination': {
+                        'count': total_projects,
+                        'page_size': page_size,
+                        'total_pages': total_pages,
+                        'current_page': page_number,
+                        'next': paginator.get_next_link(),
+                        'previous': paginator.get_previous_link(),
                     },
                     'projects': serializer.data
                 }

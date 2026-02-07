@@ -276,6 +276,56 @@ class ProjectListSerializer(serializers.ModelSerializer):
         return None
 
 
+class ProjectDocumentSerializer(serializers.ModelSerializer):
+    """Serializer for ProjectDocument"""
+    uploaded_by_name = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
+    file_size = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ProjectDocument
+        fields = [
+            'id',
+            'project',
+            'document_name',
+            'document_type',
+            'file',
+            'file_url',
+            'file_size',
+            'description',
+            'uploaded_by',
+            'uploaded_by_name',
+            'uploaded_at',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'project', 'uploaded_by', 'created_at', 'updated_at']
+    
+    def get_uploaded_by_name(self, obj):
+        """Get uploader full name"""
+        if obj.uploaded_by:
+            return f"{obj.uploaded_by.first_name} {obj.uploaded_by.last_name}".strip() or obj.uploaded_by.username
+        return None
+    
+    def get_file_url(self, obj):
+        """Get file URL"""
+        if obj.file:
+            try:
+                return obj.file.url
+            except (ValueError, AttributeError):
+                return None
+        return None
+    
+    def get_file_size(self, obj):
+        """Get file size in bytes"""
+        if obj.file:
+            try:
+                return obj.file.size
+            except (ValueError, AttributeError):
+                return None
+        return None
+
+
 class ProjectDetailSerializer(serializers.ModelSerializer):
     """Serializer for Project detail view with tasks and documents"""
     tasks = TaskSerializer(many=True, read_only=True)

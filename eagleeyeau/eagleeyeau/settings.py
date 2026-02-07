@@ -209,6 +209,8 @@ CORS_ALLOWED_ORIGINS = [
     "https://chic-brioche-594496.netlify.app",
     "http://10.10.13.39:5174",
     "http://localhost:5174",
+    "https://lignaflow.com",
+    "https://app.lignaflow.com",
 ]
 
 # Allow specific headers
@@ -227,6 +229,8 @@ CORS_ALLOW_HEADERS = [
 # CSRF Trusted Origins
 CSRF_TRUSTED_ORIGINS = [
     "https://chic-brioche-594496.netlify.app",
+    "https://lignaflow.com",
+    "https://app.lignaflow.com",
 ]
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'

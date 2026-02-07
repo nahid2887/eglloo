@@ -10,6 +10,9 @@ urlpatterns = [
     # Include router URLs
     path('', include(router.urls)),
     
+    # Download project as PDF
+    path('projects/<int:pk>/download-documents/', views.ProjectViewSet.as_view({'get': 'download_documents'}), name='project-download-documents'),
+    
     # Nested URL for tasks within a project
     path('projects/<int:project_id>/tasks/', views.TaskViewSet.as_view({
         'get': 'list',

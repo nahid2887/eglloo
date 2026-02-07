@@ -1070,6 +1070,348 @@ class ProjectViewSet(viewsets.ModelViewSet):
             ),
             status=status.HTTP_200_OK
         )
+    
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    @swagger_auto_schema(
+        operation_summary="Upload a document to project",
+        operation_description="Upload a file/document associated with a project (PDF, image, doc, etc.)",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['file', 'document_name'],
+            properties={
+                'file': openapi.Schema(type=openapi.TYPE_STRING, format='binary', description='The file to upload'),
+                'document_name': openapi.Schema(type=openapi.TYPE_STRING, description='Name/title of the document'),
+                'document_type': openapi.Schema(type=openapi.TYPE_STRING, description='File type (pdf, image, doc, etc.) - optional'),
+                'description': openapi.Schema(type=openapi.TYPE_STRING, description='Optional description of the document'),
+            }
+        ),
+        responses={201: openapi.Response(description="Document uploaded successfully")},
+        tags=['Projects - Documents']
+    )
+    def upload_document(self, request, pk=None):
+        """Upload a document to a project"""
+        try:
+            project = self.get_object()
+            
+            # Check for required fields
+            if 'file' not in request.FILES:
+                return Response(
+                    format_response(
+                        success=False,
+                        message="File is required",
+                        data=None
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            document_name = request.data.get('document_name', '').strip()
+            if not document_name:
+                return Response(
+                    format_response(
+                        success=False,
+                        message="Document name is required",
+                        data=None
+                    ),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Create the ProjectDocument
+            from .models import ProjectDocument
+            document = ProjectDocument.objects.create(
+                project=project,
+                file=request.FILES['file'],
+                document_name=document_name,
+                document_type=request.data.get('document_type', 'file').strip(),
+                description=request.data.get('description', '').strip() or None,
+                uploaded_by=request.user
+            )
+            
+            from .serializers import ProjectDocumentSerializer
+            serializer = ProjectDocumentSerializer(document)
+            
+            return Response(
+                format_response(
+                    success=True,
+                    message="Document uploaded successfully",
+                    data=serializer.data
+                ),
+                status=status.HTTP_201_CREATED
+            )
+        
+        except Exception as e:
+            return Response(
+                format_response(
+                    success=False,
+                    message=f"Error uploading document: {str(e)}",
+                    data=None
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    @swagger_auto_schema(
+        operation_summary="Download project as PDF",
+        operation_description="Download complete project information as a single PDF file with all details, tasks, and metadata.",
+        responses={200: openapi.Response(description="PDF file with all project information")},
+        tags=['Projects - Documents']
+    )
+    def download_documents(self, request, pk=None):
+        """Download complete project information as PDF"""
+        try:
+            project = self.get_object()
+            
+            # Generate PDF with all project info
+            pdf_content = self._generate_project_pdf(project)
+            
+            if not pdf_content:
+                return Response(
+                    format_response(
+                        success=False,
+                        message="Error generating PDF",
+                        data=None
+                    ),
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            from django.http import FileResponse
+            import io
+            
+            pdf_buffer = io.BytesIO(pdf_content)
+            filename = f"{project.project_name}_Project_Report.pdf"
+            response = FileResponse(
+                pdf_buffer,
+                content_type='application/pdf',
+                as_attachment=True,
+                filename=filename
+            )
+            return response
+        
+        except Exception as e:
+            return Response(
+                format_response(
+                    success=False,
+                    message=f"Error downloading project: {str(e)}",
+                    data=None
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def _generate_project_pdf(self, project):
+        """Generate a comprehensive PDF of the project with all information"""
+        try:
+            from io import BytesIO
+            from reportlab.lib.pagesizes import letter
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import inch
+            from reportlab.lib import colors
+            from datetime import datetime
+            
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+            elements = []
+            styles = getSampleStyleSheet()
+            
+            # Custom styles
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=24,
+                textColor=colors.HexColor('#1f4788'),
+                spaceAfter=12,
+                fontName='Helvetica-Bold'
+            )
+            
+            heading_style = ParagraphStyle(
+                'CustomHeading',
+                parent=styles['Heading2'],
+                fontSize=13,
+                textColor=colors.HexColor('#2d5aa6'),
+                spaceAfter=8,
+                spaceBefore=10,
+                fontName='Helvetica-Bold'
+            )
+            
+            # Title
+            elements.append(Paragraph(f"Project Report: {project.project_name}", title_style))
+            elements.append(Spacer(1, 0.15 * inch))
+            
+            # ===== PROJECT DETAILS =====
+            elements.append(Paragraph("PROJECT DETAILS", heading_style))
+            project_data = [
+                ['Field', 'Value'],
+                ['Project Name', project.project_name or 'N/A'],
+                ['Client Name', project.client_name or 'N/A'],
+                ['Status', project.status.replace('_', ' ').title()],
+                ['Created Date', project.creating_date.strftime('%Y-%m-%d') if project.creating_date else 'N/A'],
+                ['Start Date', project.start_date.strftime('%Y-%m-%d') if project.start_date else 'N/A'],
+                ['End Date', project.end_date.strftime('%Y-%m-%d') if project.end_date else 'N/A'],
+                ['Total Amount', f"${project.total_amount:,.2f}"],
+                ['Estimated Cost', f"${project.estimated_cost:,.2f}"],
+                ['Created By', f"{project.created_by.first_name} {project.created_by.last_name}" if project.created_by else 'N/A'],
+                ['Assigned To', f"{project.assigned_to.first_name} {project.assigned_to.last_name}" if project.assigned_to else 'Unassigned'],
+            ]
+            
+            project_table = Table(project_data, colWidths=[1.8*inch, 3.7*inch])
+            project_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8f0f8')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            elements.append(project_table)
+            elements.append(Spacer(1, 0.2 * inch))
+            
+            # ===== DESCRIPTION =====
+            if project.description:
+                elements.append(Paragraph("DESCRIPTION", heading_style))
+                elements.append(Paragraph(project.description, styles['BodyText']))
+                elements.append(Spacer(1, 0.15 * inch))
+            
+            # ===== ROOMS =====
+            if project.rooms:
+                elements.append(Paragraph("ROOMS INVOLVED", heading_style))
+                rooms_text = ', '.join(project.rooms) if isinstance(project.rooms, list) else str(project.rooms)
+                elements.append(Paragraph(rooms_text, styles['BodyText']))
+                elements.append(Spacer(1, 0.15 * inch))
+            
+            # ===== TASKS SUMMARY =====
+            elements.append(Paragraph("TASKS SUMMARY", heading_style))
+            tasks = project.tasks.all()
+            task_count = tasks.count()
+            completed_count = tasks.filter(status='completed').count()
+            in_progress_count = tasks.filter(status='in_progress').count()
+            not_started_count = tasks.filter(status='not_started').count()
+            blocked_count = tasks.filter(status='blocked').count()
+            
+            task_summary_data = [
+                ['Status', 'Count'],
+                ['Total Tasks', str(task_count)],
+                ['Completed', str(completed_count)],
+                ['In Progress', str(in_progress_count)],
+                ['Not Started', str(not_started_count)],
+                ['Blocked', str(blocked_count)],
+            ]
+            
+            task_table = Table(task_summary_data, colWidths=[2.5*inch, 2*inch])
+            task_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8f0f8')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+            ]))
+            elements.append(task_table)
+            elements.append(Spacer(1, 0.2 * inch))
+            
+            # ===== DETAILED TASKS LIST =====
+            if task_count > 0:
+                elements.append(Paragraph("DETAILED TASKS", heading_style))
+                
+                tasks_list_data = [
+                    ['Task', 'Room', 'Status', 'Priority', 'Assigned To', 'Due Date']
+                ]
+                
+                for task in tasks.order_by('priority', 'due_date'):
+                    assigned_to = task.assigned_employee.username if task.assigned_employee else 'Unassigned'
+                    due_date = task.due_date.strftime('%Y-%m-%d') if task.due_date else 'N/A'
+                    
+                    tasks_list_data.append([
+                        task.task_name[:30],
+                        task.room or 'N/A',
+                        task.status.replace('_', ' ').title(),
+                        task.priority.title(),
+                        assigned_to,
+                        due_date
+                    ])
+                
+                tasks_list_table = Table(tasks_list_data, colWidths=[1.4*inch, 1*inch, 1.1*inch, 0.9*inch, 1.1*inch, 1*inch])
+                tasks_list_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8f0f8')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ]))
+                elements.append(tasks_list_table)
+                elements.append(Spacer(1, 0.15 * inch))
+            
+            # ===== DOCUMENTS =====
+            from .models import ProjectDocument
+            documents = ProjectDocument.objects.filter(project=project)
+            if documents.exists():
+                elements.append(Paragraph("DOCUMENTS", heading_style))
+                
+                docs_data = [
+                    ['Document Name', 'Type', 'Uploaded By', 'Date']
+                ]
+                
+                for doc in documents.order_by('-uploaded_at'):
+                    uploader = doc.uploaded_by.username if doc.uploaded_by else 'System'
+                    date = doc.uploaded_at.strftime('%Y-%m-%d %H:%M') if doc.uploaded_at else 'N/A'
+                    
+                    docs_data.append([
+                        doc.document_name[:35],
+                        doc.document_type,
+                        uploader,
+                        date
+                    ])
+                
+                docs_table = Table(docs_data, colWidths=[2.5*inch, 1*inch, 1.5*inch, 1.5*inch])
+                docs_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8f0f8')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
+                ]))
+                elements.append(docs_table)
+                elements.append(Spacer(1, 0.15 * inch))
+            
+            # ===== FOOTER =====
+            elements.append(Spacer(1, 0.3 * inch))
+            footer_style = ParagraphStyle(
+                'Footer',
+                parent=styles['Normal'],
+                fontSize=8,
+                textColor=colors.grey,
+                alignment=1
+            )
+            elements.append(Paragraph(
+                f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Lignaflow Project Management System",
+                footer_style
+            ))
+            
+            # Build PDF
+            doc.build(elements)
+            return buffer.getvalue()
+        
+        except ImportError:
+            return None
+        except Exception as e:
+            return None
 
 
 # ====================== TASK VIEWSET ======================

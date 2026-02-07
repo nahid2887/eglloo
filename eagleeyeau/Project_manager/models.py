@@ -59,6 +59,44 @@ class Project(models.Model):
         return f"{self.project_name} - {self.client_name}"
 
 
+class ProjectDocument(models.Model):
+    """
+    Model to store documents/files associated with a project.
+    """
+    
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='documents')
+    document_name = models.CharField(max_length=300, help_text="Name or title of the document")
+    document_type = models.CharField(
+        max_length=50,
+        default='pdf',
+        help_text="File type (pdf, image, doc, etc.)"
+    )
+    file = models.FileField(
+        upload_to='project_documents/%Y/%m/%d/',
+        help_text="The actual file"
+    )
+    description = models.TextField(null=True, blank=True, help_text="Optional description of the document")
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='uploaded_project_documents'
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-uploaded_at']
+        indexes = [
+            models.Index(fields=['project', '-uploaded_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.document_name} - {self.project.project_name}"
+
+
 class Task(models.Model):
     """
     Task model for individual tasks within a project.

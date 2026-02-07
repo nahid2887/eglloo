@@ -268,6 +268,234 @@ class EstimateViewSet(viewsets.ModelViewSet):
             'status': estimate.status
         })
     
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    @swagger_auto_schema(
+        operation_summary="Download estimate as PDF",
+        operation_description="Download complete estimate information as a PDF file with all items, pricing, and totals.",
+        responses={200: openapi.Response(description="PDF file with estimate information")},
+        tags=['Estimates']
+    )
+    def download_pdf(self, request, pk=None):
+        """Download estimate as PDF"""
+        try:
+            estimate = self.get_object()
+            pdf_content = self._generate_estimate_pdf(estimate)
+            
+            if not pdf_content:
+                return Response(
+                    format_response(
+                        success=False,
+                        message="Error generating PDF",
+                        data=None
+                    ),
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            from django.http import FileResponse
+            import io
+            
+            pdf_buffer = io.BytesIO(pdf_content)
+            filename = f"Estimate_{estimate.serial_number}.pdf"
+            response = FileResponse(
+                pdf_buffer,
+                content_type='application/pdf',
+                as_attachment=True,
+                filename=filename
+            )
+            return response
+        
+        except Exception as e:
+            return Response(
+                format_response(
+                    success=False,
+                    message=f"Error downloading estimate: {str(e)}",
+                    data=None
+                ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def _generate_estimate_pdf(self, estimate):
+        """Generate PDF of the estimate with all details"""
+        try:
+            from io import BytesIO
+            from reportlab.lib.pagesizes import letter
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import inch
+            from reportlab.lib import colors
+            from datetime import datetime
+            
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+            elements = []
+            styles = getSampleStyleSheet()
+            
+            # Custom styles
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=22,
+                textColor=colors.HexColor('#1f4788'),
+                spaceAfter=12,
+                fontName='Helvetica-Bold'
+            )
+            
+            heading_style = ParagraphStyle(
+                'CustomHeading',
+                parent=styles['Heading2'],
+                fontSize=13,
+                textColor=colors.HexColor('#2d5aa6'),
+                spaceAfter=8,
+                spaceBefore=10,
+                fontName='Helvetica-Bold'
+            )
+            
+            # Title
+            elements.append(Paragraph(f"ESTIMATE: {estimate.serial_number}", title_style))
+            if estimate.estimate_number:
+                elements.append(Paragraph(f"Estimate #: {estimate.estimate_number}", styles['Normal']))
+            elements.append(Spacer(1, 0.15 * inch))
+            
+            # ===== ESTIMATE DETAILS =====
+            elements.append(Paragraph("ESTIMATE DETAILS", heading_style))
+            details_data = [
+                ['Field', 'Value'],
+                ['Client Name', estimate.client_name or 'N/A'],
+                ['Project Name', estimate.project_name or 'N/A'],
+                ['Serial Number', estimate.serial_number],
+                ['Status', estimate.status.replace('_', ' ').title()],
+                ['Created Date', estimate.estimate_date.strftime('%Y-%m-%d') if estimate.estimate_date else 'N/A'],
+                ['End Date', estimate.end_date.strftime('%Y-%m-%d') if estimate.end_date else 'N/A'],
+                ['Created By', estimate.created_by.email if estimate.created_by else 'System'],
+            ]
+            
+            details_table = Table(details_data, colWidths=[1.8*inch, 3.7*inch])
+            details_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8f0f8')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9f9f9')]),
+            ]))
+            elements.append(details_table)
+            elements.append(Spacer(1, 0.15 * inch))
+            
+            # ===== ITEMS TABLE =====
+            if estimate.items:
+                elements.append(Paragraph("ESTIMATE ITEMS", heading_style))
+                
+                items_data = [
+                    ['Item Type', 'Item', 'Qty', 'Unit Price', 'Item Total', 'Notes']
+                ]
+                
+                for item in estimate.items:
+                    item_type = item.get('item_type', 'N/A')
+                    item_id = item.get('item_id', 'N/A')
+                    quantity = item.get('quantity', 0)
+                    unit_price = item.get('unit_price', 0)
+                    item_total = quantity * unit_price
+                    notes = item.get('notes', '')[:50]
+                    
+                    items_data.append([
+                        item_type.title(),
+                        f"ID: {item_id}",
+                        str(quantity),
+                        f"${float(unit_price):,.2f}",
+                        f"${item_total:,.2f}",
+                        notes or '-'
+                    ])
+                
+                items_table = Table(items_data, colWidths=[0.9*inch, 0.8*inch, 0.6*inch, 1.1*inch, 1.1*inch, 1.4*inch])
+                items_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8f0f8')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fafafa')]),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ]))
+                elements.append(items_table)
+                elements.append(Spacer(1, 0.2 * inch))
+            
+            # ===== PRICING SUMMARY =====
+            elements.append(Paragraph("PRICING SUMMARY", heading_style))
+            
+            total_cost = estimate.total_cost
+            profit_margin = estimate.profit_margin
+            total_with_profit = estimate.total_with_profit
+            tax = estimate.income_tax
+            total_with_tax = estimate.total_with_tax
+            
+            pricing_data = [
+                ['Description', 'Amount'],
+                ['Subtotal', f"${total_cost:,.2f}"],
+                [f'Profit Margin ({profit_margin}%)', f"${total_with_profit - total_cost:,.2f}"],
+                ['Subtotal with Profit', f"${total_with_profit:,.2f}"],
+                [f'Tax ({tax}%)', f"${total_with_tax - total_with_profit:,.2f}"],
+                ['TOTAL AMOUNT', f"${total_with_tax:,.2f}"],
+            ]
+            
+            pricing_table = Table(pricing_data, colWidths=[3.25*inch, 2.25*inch])
+            pricing_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8f0f8')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#d4e6f1')),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, -1), (-1, -1), 11),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f9f9f9')]),
+            ]))
+            elements.append(pricing_table)
+            elements.append(Spacer(1, 0.2 * inch))
+            
+            # ===== ROOMS =====
+            if estimate.targeted_rooms:
+                elements.append(Paragraph("TARGETED ROOMS", heading_style))
+                rooms_text = ', '.join(estimate.targeted_rooms) if isinstance(estimate.targeted_rooms, list) else str(estimate.targeted_rooms)
+                elements.append(Paragraph(rooms_text, styles['BodyText']))
+                elements.append(Spacer(1, 0.15 * inch))
+            
+            # ===== NOTES =====
+            if estimate.notes:
+                elements.append(Paragraph("NOTES", heading_style))
+                elements.append(Paragraph(estimate.notes, styles['BodyText']))
+                elements.append(Spacer(1, 0.15 * inch))
+            
+            # ===== FOOTER =====
+            elements.append(Spacer(1, 0.3 * inch))
+            footer_style = ParagraphStyle(
+                'Footer',
+                parent=styles['Normal'],
+                fontSize=8,
+                textColor=colors.grey,
+                alignment=1
+            )
+            elements.append(Paragraph(
+                f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Lignaflow Estimating System",
+                footer_style
+            ))
+            
+            # Build PDF
+            doc.build(elements)
+            return buffer.getvalue()
+        
+        except ImportError:
+            return None
+        except Exception as e:
+            return None
+    
     @swagger_auto_schema(
         operation_summary="Get estimates by status",
         operation_description="Filter estimates by status (pending, sent, approved, rejected).",

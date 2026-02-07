@@ -236,9 +236,9 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'nahid2887@gmail.com'
-EMAIL_HOST_PASSWORD = 'qsqedgvsqywhumbz'
-DEFAULT_FROM_EMAIL = 'nahid2887@gmail.com'
+EMAIL_HOST_USER='nahid288724@gmail.com'
+EMAIL_HOST_PASSWORD='geva iusd koxs qtvj'
+DEFAULT_FROM_EMAIL='nahid288724@gmail.com'
 
 # Swagger Settings
 SWAGGER_SETTINGS = {

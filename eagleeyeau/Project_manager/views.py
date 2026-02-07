@@ -1361,7 +1361,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 elements.append(Paragraph("DOCUMENTS", heading_style))
                 
                 docs_data = [
-                    ['Document Name', 'Type', 'Uploaded By', 'Date']
+                    ['Document Name', 'Uploaded By', 'Date']
                 ]
                 
                 for doc in documents.order_by('-uploaded_at'):
@@ -1370,12 +1370,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     
                     docs_data.append([
                         doc.document_name[:35],
-                        doc.document_type,
                         uploader,
                         date
                     ])
                 
-                docs_table = Table(docs_data, colWidths=[2.5*inch, 1*inch, 1.5*inch, 1.5*inch])
+                docs_table = Table(docs_data, colWidths=[2.5*inch, 1.5*inch, 1.5*inch])
                 docs_table.setStyle(TableStyle([
                     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8f0f8')),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),

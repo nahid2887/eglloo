@@ -268,7 +268,7 @@ class EstimateViewSet(viewsets.ModelViewSet):
             'status': estimate.status
         })
     
-    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['get'])
     @swagger_auto_schema(
         operation_summary="Download estimate as PDF",
         operation_description="Download complete estimate information as a PDF file with all items, pricing, and totals.",

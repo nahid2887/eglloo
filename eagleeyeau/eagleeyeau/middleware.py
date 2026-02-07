@@ -62,7 +62,16 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         method = request.method
         path = request.path
         status_code = response.status_code
-        content_length = len(response.content)
+        
+        # Handle both regular and streaming responses
+        if hasattr(response, 'streaming_content'):
+            content_length = 0  # Streaming response, don't try to get content length
+        else:
+            try:
+                content_length = len(response.content)
+            except (AttributeError, TypeError):
+                content_length = 0
+        
         user = request.user if request.user.is_authenticated else "Anonymous"
         
         # Determine status color/indicator
